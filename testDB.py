@@ -4,6 +4,7 @@ import time
 import argparse
 import json
 import random
+from Temp import getTemp
 from datetime import datetime
 AllowedActions = ['both', 'publish', 'subscribe']
 
@@ -66,9 +67,9 @@ while True:
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
     message = {}
     message["time"] = dt_string
-    message["temp"] = random.randint(0,30000)
+    message["temp"] = getTemp()
     messageJson = json.dumps(message)
     myAWSIoTMQTTClient.publish(topic, messageJson, 1)
     print('Published topic %s: %s\n' % (topic, messageJson))
     loopCount += 1
-    time.sleep(1)
+    time.sleep(10)
