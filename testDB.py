@@ -1,110 +1,74 @@
-import os
-import sys
-import time
-import uuid
-import json
-import logging
-import argparse
-from AWSIoTPythonSDK.core.greengrass.discovery.providers import DiscoveryInfoProvider
-from AWSIoTPythonSDK.core.protocol.connection.cores import ProgressiveBackOffCore
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
-from AWSIoTPythonSDK.exception.AWSIoTExceptions import DiscoveryInvalidRequestException
+import logging
+import time
+import argparse
+import json
+import random
+from datetime import datetime
+AllowedActions = ['both', 'publish', 'subscribe']
 
-MAX_DISCOVERY_RETRIES = 10
+# Custom MQTT message callback
+def customCallback(client, userdata, message):
+    print("Received a new message: ")
+    print(message.payload)
+    print("from topic: ")
+    print(message.topic)
+    print("--------------\n\n")
 
-def customOnMessage(message):
-    print('Received message on topic %s: %s\n' % (message.topic, message.payload))
 
-rootCAPath = "~/certs/AmazonRootCA1.pem"
-certificatePath = "~/certs/device.pem.crt"
-privateKeyPath = "~/certs/private.pem.key"
+
+
 host = "a1botgu2gaco6r-ats.iot.us-west-2.amazonaws.com"
-thingName = "pine64"
+rootCAPath = "/home/antoine/certs/AmazonRootCA1.pem"
+certificatePath = "/home/antoine/certs/device.pem.crt"
+privateKeyPath = "/home/antoine/certs/private.pem.key"
+port = 443
+useWebsocket = False
 topic = "iot/topic"
+thingName = "pine64"
 clientId = thingName
 
 
+# Configure logging
+logger = logging.getLogger("AWSIoTPythonSDK.core")
+logger.setLevel(logging.DEBUG)
+streamHandler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+streamHandler.setFormatter(formatter)
+logger.addHandler(streamHandler)
 
-# Discover GGCs
-discoveryInfoProvider = DiscoveryInfoProvider()
-discoveryInfoProvider.configureEndpoint(host)
-discoveryInfoProvider.configureCredentials(rootCAPath, certificatePath, privateKeyPath)
-discoveryInfoProvider.configureTimeout(10)  # 10 sec
+# Init AWSIoTMQTTClient
+myAWSIoTMQTTClient = None
+if useWebsocket:
+    myAWSIoTMQTTClient = AWSIoTMQTTClient(clientId, useWebsocket=True)
+    myAWSIoTMQTTClient.configureEndpoint(host, port)
+    myAWSIoTMQTTClient.configureCredentials(rootCAPath)
+else:
+    myAWSIoTMQTTClient = AWSIoTMQTTClient(clientId)
+    myAWSIoTMQTTClient.configureEndpoint(host, port)
+    myAWSIoTMQTTClient.configureCredentials(rootCAPath, privateKeyPath, certificatePath)
 
-retryCount = MAX_DISCOVERY_RETRIES
-discovered = False
-groupCA = None
-coreInfo = None
-while retryCount != 0:
-    try:
-        discoveryInfo = discoveryInfoProvider.discover(thingName)
-        caList = discoveryInfo.getAllCas()
-        coreList = discoveryInfo.getAllCores()
+# AWSIoTMQTTClient connection configuration
+myAWSIoTMQTTClient.configureAutoReconnectBackoffTime(1, 32, 20)
+myAWSIoTMQTTClient.configureOfflinePublishQueueing(-1)  # Infinite offline Publish queueing
+myAWSIoTMQTTClient.configureDrainingFrequency(2)  # Draining: 2 Hz
+myAWSIoTMQTTClient.configureConnectDisconnectTimeout(10)  # 10 sec
+myAWSIoTMQTTClient.configureMQTTOperationTimeout(5)  # 5 sec
 
-        # We only pick the first ca and core info
-        groupId, ca = caList[0]
-        coreInfo = coreList[0]
-        print("Discovered GGC: %s from Group: %s" % (coreInfo.coreThingArn, groupId))
-
-        print("Now we persist the connectivity/identity information...")
-        groupCA = GROUP_CA_PATH + groupId + "_CA_" + str(uuid.uuid4()) + ".crt"
-        if not os.path.exists(GROUP_CA_PATH):
-            os.makedirs(GROUP_CA_PATH)
-        groupCAFile = open(groupCA, "w")
-        groupCAFile.write(ca)
-        groupCAFile.close()
-
-        discovered = True
-        print("Now proceed to the connecting flow...")
-        break
-    except DiscoveryInvalidRequestException as e:
-        print("Invalid discovery request detected!")
-        print("Type: %s" % str(type(e)))
-        print("Error message: %s" % e.message)
-        print("Stopping...")
-        break
-
-        if not discovered:
-            print("Discovery failed after %d retries. Exiting...\n" % (MAX_DISCOVERY_RETRIES))
-    sys.exit(-1)
-
-# Iterate through all connection options for the core and use the first successful one
-myAWSIoTMQTTClient = AWSIoTMQTTClient(clientId)
-myAWSIoTMQTTClient.configureCredentials(groupCA, privateKeyPath, certificatePath)
-myAWSIoTMQTTClient.onMessage = customOnMessage
-
-connected = False
-for connectivityInfo in coreInfo.connectivityInfoList:
-    currentHost = connectivityInfo.host
-    currentPort = connectivityInfo.port
-    print("Trying to connect to core at %s:%d" % (currentHost, currentPort))
-    myAWSIoTMQTTClient.configureEndpoint(currentHost, currentPort)
-    try:
-        myAWSIoTMQTTClient.connect()
-        connected = True
-        break
-    except BaseException as e:
-        print("Error in connect!")
-        print("Type: %s" % str(type(e)))
-        print("Error message: %s" % e.message)
-
-if not connected:
-    print("Cannot connect to core %s. Exiting..." % coreInfo.coreThingArn)
-    sys.exit(-2)
-
-    # Successfully connected to the core
-if args.mode == 'both' or args.mode == 'subscribe':
-    myAWSIoTMQTTClient.subscribe(topic, 0, None)
+# Connect and subscribe to AWS IoT
+myAWSIoTMQTTClient.connect()
 time.sleep(2)
 
+# Publish to the same topic in a loop forever
 loopCount = 0
 while True:
+    now = datetime.now()
+    dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
     message = {}
-    message['rnd'] = 12
-    message['TimeStamp'] = loopCount
+    message["time"] = dt_string
+    message["temp"] = random.randint(0,30000)
     messageJson = json.dumps(message)
-    myAWSIoTMQTTClient.publish(topic, messageJson, 0)
-    if args.mode == 'publish':
-        print('Published topic %s: %s\n' % (topic, messageJson))
+    myAWSIoTMQTTClient.publish(topic, messageJson, 1)
+    print('Published topic %s: %s\n' % (topic, messageJson))
     loopCount += 1
     time.sleep(1)
