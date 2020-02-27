@@ -1,4 +1,3 @@
-from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 import logging
 import time
 import argparse
@@ -8,21 +7,14 @@ from datetime import datetime
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from getpass import getuser
 
-# Custom MQTT message callback
-def customCallback(client, userdata, message):
-    print("Received a new message: ")
-    print(message.payload)
-    print("from topic: ")
-    print(message.topic)
-    print("--------------\n\n")
 
 user = getuser()
 AllowedActions = ['both', 'publish', 'subscribe']
 if user == "antoine" :
-host = "a1botgu2gaco6r-ats.iot.us-west-2.amazonaws.com"
-rootCAPath = "/home/antoine/certs/AmazonRootCA1.pem"
-certificatePath = "/home/antoine/certs/device.pem.crt"
-privateKeyPath = "/home/antoine/certs/private.pem.key"
+    host = "a1botgu2gaco6r-ats.iot.us-west-2.amazonaws.com"
+    rootCAPath = "/home/antoine/certs/AmazonRootCA1.pem"
+    certificatePath = "/home/antoine/certs/device.pem.crt"
+    privateKeyPath = "/home/antoine/certs/private.pem.key"
     thingName = "pine64"
 elif user == "felix" :
     host = "a2yo8d743hfkwh-ats.iot.us-west-2.amazonaws.com"
