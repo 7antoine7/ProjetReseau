@@ -5,7 +5,8 @@ import argparse
 import json
 import random
 from datetime import datetime
-AllowedActions = ['both', 'publish', 'subscribe']
+from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
+from getpass import getuser
 
 # Custom MQTT message callback
 def customCallback(client, userdata, message):
@@ -15,17 +16,23 @@ def customCallback(client, userdata, message):
     print(message.topic)
     print("--------------\n\n")
 
-
-
-
+user = getuser()
+AllowedActions = ['both', 'publish', 'subscribe']
+if user == "antoine" :
 host = "a1botgu2gaco6r-ats.iot.us-west-2.amazonaws.com"
 rootCAPath = "/home/antoine/certs/AmazonRootCA1.pem"
 certificatePath = "/home/antoine/certs/device.pem.crt"
 privateKeyPath = "/home/antoine/certs/private.pem.key"
+    thingName = "pine64"
+elif user == "felix" :
+    host = "a2yo8d743hfkwh-ats.iot.us-west-2.amazonaws.com"
+    rootCAPath = "/home/felix/aws/cle/AmazonRootCA1.pem"
+    certificatePath = "/home/felix/aws/cle/device.pem.crt"
+    privateKeyPath = "/home/felix/aws/cle/private.pem.key"
+    thingName = "Pine"
 port = 443
 useWebsocket = False
 topic = "iot/topic"
-thingName = "pine64"
 clientId = thingName
 
 
@@ -61,6 +68,16 @@ time.sleep(2)
 
 # Publish to the same topic in a loop forever
 loopCount = 0
+
+
+# Custom MQTT message callback
+def customCallback(client, userdata, message):
+    print("Received a new message: ")
+    print(message.payload)
+    print("from topic: ")
+    print(message.topic)
+    print("--------------\n\n")
+
 while True:
     now = datetime.now()
     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
